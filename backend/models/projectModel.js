@@ -1,0 +1,228 @@
+const pool = require('../config/db');
+
+function parseFilesJson(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+function normalizeProjectRow(row) {
+  if (!row) return null;
+  return {
+    ...row,
+    hasApplied: Boolean(row.hasApplied),
+    referenceFiles: parseFilesJson(row.referenceFiles),
+    submissionFiles: parseSubmissionFiles(row.submissionFiles),
+  };
+}
+
+function parseSubmissionFiles(value) {
+  return parseFilesJson(value);
+}
+
+async function create({
+  businessId,
+  title,
+  description,
+  budget,
+  skillsRequired,
+  deadline,
+  referenceLink,
+  referenceFiles = [],
+}) {
+  const [result] = await pool.execute(
+    `INSERT INTO projects
+      (business_id, title, description, budget, skills_required, deadline, reference_link, reference_files)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      businessId,
+      title,
+      description,
+      budget,
+      skillsRequired,
+      deadline,
+      referenceLink || null,
+      JSON.stringify(referenceFiles),
+    ],
+  );
+  await pool.execute(
+    `INSERT INTO project_payments (project_id, amount, status)
+     VALUES (?, ?, 'Unfunded')
+     ON DUPLICATE KEY UPDATE amount = VALUES(amount)`,
+    [result.insertId, budget],
+  );
+  return findById(result.insertId);
+}
+
+async function findById(id, options = {}) {
+  const { viewerId = null, viewerRole = null } = options;
+  const includeApplicantFields = viewerRole === 'freelancer' && viewerId != null;
+  const applicantSelect = includeApplicantFields
+    ? `,
+      EXISTS(
+        SELECT 1 FROM project_applications pa
+        WHERE pa.project_id = p.id AND pa.freelancer_id = ?
+      ) AS hasApplied,
+      (
+        SELECT pa.status FROM project_applications pa
+        WHERE pa.project_id = p.id AND pa.freelancer_id = ?
+        LIMIT 1
+      ) AS applicationStatus`
+    : ', 0 AS hasApplied, NULL AS applicationStatus';
+  const [rows] = await pool.execute(
+    `SELECT p.id, p.business_id AS businessId, p.title, p.description, p.budget,
+      p.skills_required AS skillsRequired, p.deadline, p.status, p.freelancer_id AS freelancerId,
+      p.reference_link AS referenceLink, p.reference_files AS referenceFiles,
+      p.submission_text AS submissionText, p.submission_link AS submissionLink,
+      p.submission_files AS submissionFiles, p.created_at AS createdAt, u.name AS businessName,
+      fu.name AS freelancerName
+      ${applicantSelect}
+     FROM projects p
+     INNER JOIN users u ON u.id = p.business_id
+     LEFT JOIN users fu ON fu.id = p.freelancer_id
+     WHERE p.id = ? LIMIT 1`,
+    includeApplicantFields ? [viewerId, viewerId, id] : [id],
+  );
+  return normalizeProjectRow(rows[0] || null);
+}
+
+async function list({ status, minBudget, maxBudget, skill, freelancerId, viewerId, viewerRole }) {
+  const clauses = [];
+  const params = [];
+  const includeApplicantFields = viewerRole === 'freelancer' && viewerId != null;
+
+  if (status) {
+    clauses.push('p.status = ?');
+    params.push(status);
+  }
+  if (minBudget != null) {
+    clauses.push('p.budget >= ?');
+    params.push(minBudget);
+  }
+  if (maxBudget != null) {
+    clauses.push('p.budget <= ?');
+    params.push(maxBudget);
+  }
+  if (skill) {
+    clauses.push('p.skills_required LIKE ?');
+    params.push(`%${skill}%`);
+  }
+  if (freelancerId != null) {
+    clauses.push('p.freelancer_id = ?');
+    params.push(freelancerId);
+  }
+
+  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  const applicantSelect = includeApplicantFields
+    ? `,
+      EXISTS(
+        SELECT 1 FROM project_applications pa
+        WHERE pa.project_id = p.id AND pa.freelancer_id = ?
+      ) AS hasApplied,
+      (
+        SELECT pa.status FROM project_applications pa
+        WHERE pa.project_id = p.id AND pa.freelancer_id = ?
+        LIMIT 1
+      ) AS applicationStatus`
+    : ', 0 AS hasApplied, NULL AS applicationStatus';
+
+  const queryParams = includeApplicantFields ? [viewerId, viewerId, ...params] : params;
+  const [rows] = await pool.execute(
+    `SELECT p.id, p.business_id AS businessId, p.title, p.description, p.budget,
+      p.skills_required AS skillsRequired, p.deadline, p.status, p.freelancer_id AS freelancerId,
+      p.reference_link AS referenceLink, p.reference_files AS referenceFiles,
+      p.submission_text AS submissionText, p.submission_link AS submissionLink,
+      p.submission_files AS submissionFiles, p.created_at AS createdAt, u.name AS businessName,
+      fu.name AS freelancerName
+      ${applicantSelect}
+     FROM projects p
+     INNER JOIN users u ON u.id = p.business_id
+     LEFT JOIN users fu ON fu.id = p.freelancer_id
+     ${where}
+     ORDER BY p.created_at DESC`,
+    queryParams,
+  );
+  return rows.map(normalizeProjectRow);
+}
+
+async function listByBusiness(businessId) {
+  const [rows] = await pool.execute(
+    `SELECT id, business_id AS businessId, title, description, budget,
+      skills_required AS skillsRequired, deadline, status, freelancer_id AS freelancerId,
+      reference_link AS referenceLink, reference_files AS referenceFiles,
+      submission_text AS submissionText, submission_link AS submissionLink,
+      submission_files AS submissionFiles, created_at AS createdAt
+     FROM projects
+     WHERE business_id = ?
+     ORDER BY created_at DESC`,
+    [businessId],
+  );
+  return rows.map(normalizeProjectRow);
+}
+
+async function acceptProjectTx(projectId, freelancerId) {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const [rows] = await connection.execute(
+      'SELECT id, status, freelancer_id AS freelancerId FROM projects WHERE id = ? FOR UPDATE',
+      [projectId],
+    );
+    const project = rows[0];
+    if (!project) {
+      throw new Error('PROJECT_NOT_FOUND');
+    }
+    if (project.status !== 'Open') {
+      throw new Error('PROJECT_NOT_OPEN');
+    }
+    if (project.freelancerId) {
+      throw new Error('PROJECT_ALREADY_ASSIGNED');
+    }
+
+    await connection.execute(
+      'UPDATE projects SET freelancer_id = ?, status = ? WHERE id = ?',
+      [freelancerId, 'Assigned', projectId],
+    );
+    await connection.commit();
+    return true;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+async function submitProject(projectId, submissionText, submissionLink, submissionFiles) {
+  await pool.execute('UPDATE projects SET status = ?, submission_text = ?, submission_link = ?, submission_files = ? WHERE id = ?', [
+    'Submitted',
+    submissionText,
+    submissionLink || null,
+    JSON.stringify(submissionFiles || []),
+    projectId,
+  ]);
+  return findById(projectId);
+}
+
+async function completeProject(projectId) {
+  await pool.execute('UPDATE projects SET status = ? WHERE id = ?', ['Completed', projectId]);
+  return findById(projectId);
+}
+
+module.exports = {
+  create,
+  findById,
+  list,
+  listByBusiness,
+  acceptProjectTx,
+  submitProject,
+  completeProject,
+};
