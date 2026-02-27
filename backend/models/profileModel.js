@@ -2,7 +2,18 @@ const pool = require('../config/db');
 
 async function getByUserId(userId) {
   const [rows] = await pool.execute(
-    'SELECT user_id AS userId, skills, bio, portfolio_link AS portfolioLink, experience_years AS experienceYears FROM freelancer_profiles WHERE user_id = ? LIMIT 1',
+    `SELECT
+      user_id AS userId,
+      skills,
+      bio,
+      portfolio_link AS portfolioLink,
+      experience_years AS experienceYears,
+      profile_photo_url AS profilePhotoUrl,
+      organization_name AS organizationName,
+      organization_website AS organizationWebsite,
+      organization_industry AS organizationIndustry
+    FROM freelancer_profiles
+    WHERE user_id = ? LIMIT 1`,
     [userId],
   );
   return rows[0] || null;
@@ -10,14 +21,58 @@ async function getByUserId(userId) {
 
 async function upsertByUserId(userId, profile) {
   await pool.execute(
-    `INSERT INTO freelancer_profiles (user_id, skills, bio, portfolio_link, experience_years)
-     VALUES (?, ?, ?, ?, ?)
+    `INSERT INTO freelancer_profiles (
+      user_id,
+      skills,
+      bio,
+      portfolio_link,
+      experience_years,
+      profile_photo_url,
+      organization_name,
+      organization_website,
+      organization_industry
+    )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
      skills = VALUES(skills),
      bio = VALUES(bio),
      portfolio_link = VALUES(portfolio_link),
-     experience_years = VALUES(experience_years)`,
-    [userId, profile.skills, profile.bio, profile.portfolioLink, profile.experienceYears],
+     experience_years = VALUES(experience_years),
+     profile_photo_url = VALUES(profile_photo_url),
+     organization_name = VALUES(organization_name),
+     organization_website = VALUES(organization_website),
+     organization_industry = VALUES(organization_industry)`,
+    [
+      userId,
+      profile.skills,
+      profile.bio,
+      profile.portfolioLink,
+      profile.experienceYears,
+      profile.profilePhotoUrl,
+      profile.organizationName,
+      profile.organizationWebsite,
+      profile.organizationIndustry,
+    ],
+  );
+  return getByUserId(userId);
+}
+
+async function updatePhotoByUserId(userId, profilePhotoUrl) {
+  await pool.execute(
+    `INSERT INTO freelancer_profiles (
+      user_id,
+      skills,
+      bio,
+      portfolio_link,
+      experience_years,
+      profile_photo_url,
+      organization_name,
+      organization_website,
+      organization_industry
+    )
+    VALUES (?, '', '', '', 0, ?, '', '', '')
+    ON DUPLICATE KEY UPDATE profile_photo_url = VALUES(profile_photo_url)`,
+    [userId, profilePhotoUrl],
   );
   return getByUserId(userId);
 }
@@ -25,4 +80,5 @@ async function upsertByUserId(userId, profile) {
 module.exports = {
   getByUserId,
   upsertByUserId,
+  updatePhotoByUserId,
 };

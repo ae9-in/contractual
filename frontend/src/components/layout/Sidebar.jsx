@@ -11,16 +11,19 @@ export default function Sidebar({ role, open, onClose }) {
 
   const items = role === 'business'
     ? [
-        { to: '/business/dashboard', label: 'Dashboard' },
-        { to: '/business/post-project', label: 'Post Project' },
-        { to: '/business/projects', label: 'My Projects' },
-      ]
+      { to: '/business/dashboard', label: 'Dashboard' },
+      { to: '/business/post-project', label: 'Post Project' },
+      { to: '/business/projects', label: 'My Projects' },
+      { to: '/business/profile', label: 'Profile' },
+      { to: '/business/notifications', label: 'Notifications' },
+    ]
     : [
-        { to: '/freelancer/dashboard', label: 'Dashboard' },
-        { to: '/freelancer/projects', label: 'Browse Projects' },
-        { to: '/freelancer/work', label: 'My Work' },
-        { to: '/freelancer/profile', label: 'Profile' },
-      ];
+      { to: '/freelancer/dashboard', label: 'Dashboard' },
+      { to: '/freelancer/projects', label: 'Browse Projects' },
+      { to: '/freelancer/work', label: 'My Work' },
+      { to: '/freelancer/profile', label: 'Profile' },
+      { to: '/freelancer/notifications', label: 'Notifications' },
+    ];
 
   const onLogout = () => {
     logout();

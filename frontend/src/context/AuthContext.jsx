@@ -12,8 +12,13 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const raw = getStoredUserRaw();
     if (raw) {
-      setUser(JSON.parse(raw));
-      connectRealtime();
+      try {
+        setUser(JSON.parse(raw));
+        connectRealtime();
+      } catch (e) {
+        console.error('Failed to parse stored user:', e);
+        clearStoredAuth();
+      }
     }
     setLoading(false);
   }, []);

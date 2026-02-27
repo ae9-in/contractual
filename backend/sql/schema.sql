@@ -55,6 +55,10 @@ CREATE TABLE IF NOT EXISTS freelancer_profiles (
   bio TEXT NULL,
   portfolio_link VARCHAR(255) NULL,
   experience_years INT UNSIGNED NOT NULL DEFAULT 0,
+  profile_photo_url VARCHAR(500) NULL,
+  organization_name VARCHAR(150) NULL,
+  organization_website VARCHAR(255) NULL,
+  organization_industry VARCHAR(120) NULL,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_profiles_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;

@@ -4,6 +4,7 @@ import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Loader from '../components/ui/Loader';
 import EmptyState from '../components/ui/EmptyState';
+import PremiumHero from '../components/ui/PremiumHero';
 import { getNotifications, markAllNotificationsRead, markNotificationRead } from '../services/notificationService';
 import { connectRealtime, onRealtime } from '../services/realtimeService';
 import { useAuth } from '../hooks/useAuth';
@@ -112,23 +113,23 @@ export default function NotificationsPage() {
   return (
     <section className="grid">
       <Card className="stack page-header-card">
-        <div className="project-head">
-          <h2 className="section-title">Notifications</h2>
-          <div className="row">
-            <Button variant={filter === 'all' ? 'primary' : 'secondary'} onClick={() => setFilter('all')}>All</Button>
-            <Button variant={filter === 'unread' ? 'primary' : 'secondary'} onClick={() => setFilter('unread')}>Unread</Button>
-            <Button variant="secondary" onClick={onMarkAllRead} disabled={!unreadCount || isMarkingAll} loading={isMarkingAll} loadingText="Updating...">
-              Mark All Read
-            </Button>
-            <Button variant="secondary" onClick={loadNotifications} disabled={isLoading} loading={isLoading} loadingText="Refreshing...">
-              Refresh
-            </Button>
-          </div>
-        </div>
-        <p className="muted">
-          {user?.role === 'business' ? 'Business alerts and project updates.' : 'Freelancer alerts and project updates.'}
-          {' '}Unread: {unreadCount}
-        </p>
+        <PremiumHero
+          label={user?.role === 'business' ? 'Business Account' : 'Freelancer Account'}
+          title="Notifications"
+          subtitle={`${user?.role === 'business' ? 'Business alerts and project updates.' : 'Freelancer alerts and project updates.'} Unread: ${unreadCount}`}
+          actions={(
+            <>
+              <Button variant={filter === 'all' ? 'primary' : 'secondary'} onClick={() => setFilter('all')}>All</Button>
+              <Button variant={filter === 'unread' ? 'primary' : 'secondary'} onClick={() => setFilter('unread')}>Unread</Button>
+              <Button variant="secondary" onClick={onMarkAllRead} disabled={!unreadCount || isMarkingAll} loading={isMarkingAll} loadingText="Updating...">
+                Mark All Read
+              </Button>
+              <Button variant="secondary" onClick={loadNotifications} disabled={isLoading} loading={isLoading} loadingText="Refreshing...">
+                Refresh
+              </Button>
+            </>
+          )}
+        />
       </Card>
 
       {error && <p className="alert">{error}</p>}
@@ -155,7 +156,7 @@ export default function NotificationsPage() {
                   </div>
                 </div>
                 <p className="muted">{item.messageText}</p>
-                <p className="muted">Time: {new Date(item.createdAt).toLocaleString('en-IN')}</p>
+                <p className="muted">Time: {new Date(item.createdAt).toLocaleString()}</p>
               </Card>
             );
           })}

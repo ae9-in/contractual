@@ -4,8 +4,10 @@ const multer = require('multer');
 
 const submissionsDir = path.join(process.cwd(), 'uploads', 'submissions');
 const projectReferencesDir = path.join(process.cwd(), 'uploads', 'project-references');
+const profilePhotosDir = path.join(process.cwd(), 'uploads', 'profile-photos');
 fs.mkdirSync(submissionsDir, { recursive: true });
 fs.mkdirSync(projectReferencesDir, { recursive: true });
+fs.mkdirSync(profilePhotosDir, { recursive: true });
 
 function makeStorage(destinationDir) {
   return multer.diskStorage({
@@ -20,6 +22,7 @@ function makeStorage(destinationDir) {
 
 const submissionsStorage = makeStorage(submissionsDir);
 const projectReferenceStorage = makeStorage(projectReferencesDir);
+const profilePhotoStorage = makeStorage(profilePhotosDir);
 
 const uploadSubmissionFiles = multer({
   storage: submissionsStorage,
@@ -33,9 +36,16 @@ const uploadProjectReferenceFiles = multer({
   limits: { fileSize: 10 * 1024 * 1024, files: 5 },
 }).array('projectReferenceFiles', 5);
 
+const uploadProfilePhoto = multer({
+  storage: profilePhotoStorage,
+  fileFilter: profilePhotoFilter,
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+}).single('profilePhoto');
+
 module.exports = {
   uploadSubmissionFiles,
   uploadProjectReferenceFiles,
+  uploadProfilePhoto,
 };
 
 function fileFilter(_req, file, cb) {
@@ -51,6 +61,19 @@ function fileFilter(_req, file, cb) {
     'image/jpeg',
     'image/jpg',
     'text/plain',
+  ];
+  if (!allowed.includes(file.mimetype)) {
+    return cb(new Error('Unsupported file type'));
+  }
+  return cb(null, true);
+}
+
+function profilePhotoFilter(_req, file, cb) {
+  const allowed = [
+    'image/png',
+    'image/jpeg',
+    'image/jpg',
+    'image/webp',
   ];
   if (!allowed.includes(file.mimetype)) {
     return cb(new Error('Unsupported file type'));

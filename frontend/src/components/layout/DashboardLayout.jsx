@@ -1,17 +1,9 @@
 import { Outlet } from 'react-router-dom';
-import { useState } from 'react';
-import Sidebar from './Sidebar';
-import { useAuth } from '../../hooks/useAuth';
 
 export default function DashboardLayout() {
-  const { user } = useAuth();
-  const [open, setOpen] = useState(false);
-
   return (
-    <div className="dashboard-layout">
-      <button className="sidebar-toggle" onClick={() => setOpen((v) => !v)}>Menu</button>
-      <Sidebar role={user?.role} open={open} onClose={() => setOpen(false)} />
-      <main className="dashboard-main page-enter">
+    <div className="dashboard-layout" style={{ display: 'block' }}>
+      <main className="dashboard-main page-enter" style={{ width: '100%', minWidth: 0 }}>
         <Outlet />
       </main>
     </div>

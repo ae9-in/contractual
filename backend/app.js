@@ -1,5 +1,7 @@
 const express = require('express');
 const path = require('path');
+const cors = require('cors');
+const env = require('./config/env');
 const authRoutes = require('./routes/authRoutes');
 const projectRoutes = require('./routes/projectRoutes');
 const profileRoutes = require('./routes/profileRoutes');
@@ -9,15 +11,27 @@ const ratingRoutes = require('./routes/ratingRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const paymentController = require('./controllers/paymentController');
 const errorMiddleware = require('./middleware/errorMiddleware');
+const assetAuthMiddleware = require('./middleware/assetAuthMiddleware');
 
 const app = express();
 
-app.use(require('helmet')());
-app.use(require('cors')());
+app.use(require('helmet')({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
+const corsOptions = env.nodeEnv === 'production'
+  ? {
+      origin: env.corsOrigins.length ? env.corsOrigins : false,
+      credentials: true,
+    }
+  : {
+      origin: true,
+      credentials: true,
+    };
+app.use(cors(corsOptions));
 app.use(require('morgan')('dev'));
 app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), paymentController.handleGatewayWebhook);
 app.use(express.json());
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+app.use('/uploads', assetAuthMiddleware, express.static(path.join(process.cwd(), 'uploads')));
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });

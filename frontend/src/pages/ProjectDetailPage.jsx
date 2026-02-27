@@ -28,6 +28,7 @@ import { formatDateOnly } from '../utils/date';
 import { getPaymentGatewayConfig } from '../services/paymentService';
 import { loadRazorpayCheckoutScript } from '../utils/paymentGateway';
 import { getApiErrorMessage, getApiFieldErrors } from '../utils/validation';
+import { getStoredToken } from '../utils/authStorage';
 import {
   connectRealtime,
   joinProjectRoom,
@@ -103,6 +104,14 @@ export default function ProjectDetailPage() {
   const canCompleteProject = Boolean(
     user?.role === 'business' && project?.status === 'Submitted' && payment?.status === 'Released',
   );
+  const apiOrigin = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+  const buildProtectedFileUrl = (relativePath) => {
+    const token = getStoredToken();
+    if (!token) return `${apiOrigin}${relativePath}`;
+    const separator = String(relativePath).includes('?') ? '&' : '?';
+    return `${apiOrigin}${relativePath}${separator}token=${encodeURIComponent(token)}`;
+  };
 
   const loadProject = async () => {
     try {
@@ -498,61 +507,72 @@ export default function ProjectDetailPage() {
   if (isLoading) return <Loader label="Loading project details..." />;
 
   return (
-    <section className="grid">
-      <div className="breadcrumb">
-        <Link to={user?.role === 'business' ? '/business/projects' : '/freelancer/work'}>
+    <section
+      className="premium-page-wrap"
+      style={{ display: 'flex', flexDirection: 'column', gap: '32px', padding: '32px clamp(20px, 5vw, 60px)', minHeight: '100vh', position: 'relative', background: 'radial-gradient(1200px 600px at 0% 0%, #f5f3ff 0%, transparent 50%), radial-gradient(1000px 600px at 100% 100%, #eef2ff 0%, transparent 50%)' }}
+    >
+      <div className="bg-noise" />
+
+      <div className="breadcrumb" style={{ position: 'relative', zIndex: 10, display: 'flex', gap: '12px', alignItems: 'center', fontSize: '1rem', fontWeight: 600 }}>
+        <Link to={user?.role === 'business' ? '/business/projects' : '/freelancer/work'} style={{ color: '#4f46e5', textDecoration: 'none' }}>
           {user?.role === 'business' ? 'My Projects' : 'My Work'}
         </Link>
-        <span>/</span>
-        <span>Project Detail</span>
+        <span style={{ color: '#94a3b8' }}>/</span>
+        <span style={{ color: '#64748b' }}>Project Detail</span>
       </div>
 
-      {error && <p className="alert">{error}</p>}
+      {error && <p className="badge-premium" style={{ background: 'rgba(239, 68, 68, 0.08)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.15)', padding: '16px', textAlign: 'center' }}>{error}</p>}
 
       {project && (
-        <>
-          <Card className="project-card project-detail-card">
-            <div className="project-head">
-              <h2 className="section-title">{project.title}</h2>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '32px', position: 'relative', zIndex: 10 }}>
+          <div className="card-ui" style={{ padding: '40px', border: '1px solid #e2e8f0', background: 'rgba(255, 255, 255, 0.8)' }}>
+            <div className="project-head" style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <h2 className="section-title-refined" style={{ margin: 0, fontSize: '2.2rem', color: '#0f172a' }}>{project.title}</h2>
               <StatusBadge status={project.status} />
             </div>
             <StatusTimeline status={project.status} />
-            <div className="detail-meta-grid">
-              <div className="detail-meta-item">
-                <p className="detail-meta-label">Budget</p>
-                <p className="detail-meta-value">{formatINR(project.budget)}</p>
+            <div className="detail-meta-grid" style={{ marginTop: '32px' }}>
+              <div className="detail-meta-item" style={{ background: '#f8fafc', padding: '20px', borderRadius: '16px', border: '1px solid #f1f5f9' }}>
+                <p className="detail-meta-label" style={{ margin: '0 0 4px', fontSize: '0.7rem', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase' }}>Budget</p>
+                <p className="detail-meta-value" style={{ margin: 0, fontSize: '1.25rem', fontWeight: 900, color: '#10b981' }}>{formatINR(project.budget)}</p>
               </div>
-              <div className="detail-meta-item">
-                <p className="detail-meta-label">Deadline</p>
-                <p className="detail-meta-value">{formatDateOnly(project.deadline)}</p>
+              <div className="detail-meta-item" style={{ background: '#f8fafc', padding: '20px', borderRadius: '16px', border: '1px solid #f1f5f9' }}>
+                <p className="detail-meta-label" style={{ margin: '0 0 4px', fontSize: '0.7rem', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase' }}>Deadline</p>
+                <p className="detail-meta-value" style={{ margin: 0, fontSize: '1.25rem', fontWeight: 900, color: '#1e293b' }}>{formatDateOnly(project.deadline)}</p>
               </div>
-              <div className="detail-meta-item">
-                <p className="detail-meta-label">Business</p>
-                <p className="detail-meta-value">{project.businessName || 'Business'}</p>
+              <div className="detail-meta-item" style={{ background: '#f8fafc', padding: '20px', borderRadius: '16px', border: '1px solid #f1f5f9' }}>
+                <p className="detail-meta-label" style={{ margin: '0 0 4px', fontSize: '0.7rem', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase' }}>Business Identity</p>
+                <p className="detail-meta-value" style={{ margin: 0, fontSize: '1.25rem', fontWeight: 900, color: '#1e293b' }}>{project.businessName || 'Corporate Entity'}</p>
               </div>
-              <div className="detail-meta-item">
-                <p className="detail-meta-label">Assigned Freelancer</p>
-                <p className="detail-meta-value">{project.freelancerName || 'Not assigned'}</p>
+              <div className="detail-meta-item" style={{ background: '#f8fafc', padding: '20px', borderRadius: '16px', border: '1px solid #f1f5f9' }}>
+                <p className="detail-meta-label" style={{ margin: '0 0 4px', fontSize: '0.7rem', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase' }}>Asset Contributor</p>
+                <p className="detail-meta-value" style={{ margin: 0, fontSize: '1.25rem', fontWeight: 900, color: '#4f46e5' }}>{project.freelancerName || 'Pending Allocation'}</p>
               </div>
             </div>
-            <p className="muted"><strong>Skills Required:</strong> {project.skillsRequired}</p>
-            <p className="muted"><strong>Description:</strong> {project.description}</p>
+
+            <div style={{ marginTop: '32px' }}>
+              <p style={{ fontSize: '1rem', color: '#1e293b' }}><strong>Core Skills:</strong> {project.skillsRequired}</p>
+              <div style={{ marginTop: '20px', padding: '24px', background: '#f8fafc', borderRadius: '24px', border: '1px solid #f1f5f9' }}>
+                <h3 style={{ margin: '0 0 12px', fontSize: '1.1rem', fontWeight: 900, color: '#0f172a' }}>Strategic Brief</h3>
+                <p style={{ margin: 0, color: '#64748b', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{project.description}</p>
+              </div>
+            </div>
+
             {(project.referenceLink || (project.referenceFiles || []).length > 0) && (
-              <div className="stack">
-                <h3>Project References</h3>
+              <div className="stack" style={{ marginTop: '32px' }}>
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 900, color: '#0f172a' }}>Project References</h3>
                 {project.referenceLink && (
-                  <p className="muted">
-                    URL:{' '}
-                    <a href={project.referenceLink} target="_blank" rel="noreferrer">
+                  <p style={{ color: '#64748b' }}>
+                    Asset URL:{' '}
+                    <a href={project.referenceLink} target="_blank" rel="noreferrer" style={{ color: '#4f46e5', fontWeight: 700 }}>
                       {project.referenceLink}
                     </a>
                   </p>
                 )}
                 {(project.referenceFiles || []).length > 0 && (
-                  <div className="stack">
-                    <p className="muted">Files:</p>
+                  <div className="stack" style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
                     {(project.referenceFiles || []).map((file) => (
-                      <a key={file.url} href={`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}${file.url}`} target="_blank" rel="noreferrer">
+                      <a key={file.url} href={buildProtectedFileUrl(file.url)} target="_blank" rel="noreferrer" style={{ padding: '8px 16px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '10px', color: '#4f46e5', fontWeight: 600, textDecoration: 'none', fontSize: '0.9rem' }}>
                         {file.name}
                       </a>
                     ))}
@@ -560,339 +580,184 @@ export default function ProjectDetailPage() {
                 )}
               </div>
             )}
+
             {(project.submissionText || project.submissionLink || (project.submissionFiles || []).length > 0) && (
-              <div className="stack">
-                <h3>Submitted Details</h3>
-                {project.submissionText && <p className="muted">Notes: {project.submissionText}</p>}
+              <div className="stack" style={{ marginTop: '32px', padding: '32px', background: 'rgba(16, 185, 129, 0.05)', borderRadius: '24px', border: '1px solid rgba(16, 185, 129, 0.15)' }}>
+                <h3 style={{ margin: '0 0 16px', fontSize: '1.25rem', fontWeight: 900, color: '#065f46' }}>Evidence of Work Deliverables</h3>
+                {project.submissionText && <p style={{ color: '#065f46', whiteSpace: 'pre-wrap' }}><strong>Analytical Notes:</strong> {project.submissionText}</p>}
                 {project.submissionLink && (
-                  <p className="muted">
-                    Link:{' '}
-                    <a href={project.submissionLink} target="_blank" rel="noreferrer">
+                  <p style={{ color: '#065f46', marginTop: '12px' }}>
+                    <strong>Direct Access:</strong>{' '}
+                    <a href={project.submissionLink} target="_blank" rel="noreferrer" style={{ color: '#047857', fontWeight: 800 }}>
                       {project.submissionLink}
                     </a>
                   </p>
-                )}
-                {(project.submissionFiles || []).length > 0 && (
-                  <div className="stack">
-                    <p className="muted">Files:</p>
-                    {(project.submissionFiles || []).map((file) => (
-                      <a key={file.url} href={`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}${file.url}`} target="_blank" rel="noreferrer">
-                        {file.name}
-                      </a>
-                    ))}
-                  </div>
                 )}
               </div>
             )}
 
             {user?.role === 'freelancer' && project.status === 'Open' && !project.hasApplied && (
-              <div className="stack">
-                <label className="label" htmlFor="application-cover">Why are you a good fit? (Optional)</label>
+              <div className="stack" style={{ marginTop: '32px', padding: '32px', background: 'rgba(79, 70, 229, 0.05)', borderRadius: '24px', border: '1px solid rgba(79, 70, 229, 0.15)' }}>
+                <h3 style={{ margin: '0 0 20px', fontSize: '1.2rem', fontWeight: 900, color: '#1e293b' }}>Apply for this Manifesto</h3>
+                <label className="label" htmlFor="application-cover" style={{ marginBottom: '8px', display: 'block', fontWeight: 700, color: '#475569' }}>Collaborator Intent Statement (Optional)</label>
                 <textarea
                   id="application-cover"
-                  className="textarea"
+                  className="input"
+                  style={{ minHeight: '120px', resize: 'none', background: '#fff', border: '1px solid #e2e8f0', color: '#1e293b' }}
                   value={applicationCoverLetter}
                   onChange={(e) => setApplicationCoverLetter(e.target.value)}
                   disabled={isApplying}
                 />
-                <Button onClick={onApply} disabled={isApplying} loading={isApplying} loadingText="Applying...">Apply for Project</Button>
+                <Button onClick={onApply} disabled={isApplying} loading={isApplying} style={{ marginTop: '20px', height: '56px', borderRadius: '14px', fontWeight: 900 }}>Initiate Partnership</Button>
               </div>
-            )}
-            {user?.role === 'freelancer' && project.status === 'Open' && project.hasApplied && (
-              <p className="muted">Application Status: {project.applicationStatus || 'Pending'}</p>
             )}
 
             {user?.role === 'freelancer' && project.status === 'Assigned' && project.freelancerId === user.id && (
-              <div className="stack">
-                <label className="label" htmlFor="detail-submission">Submission Notes</label>
-                <textarea id="detail-submission" className="textarea" value={submissionText} onChange={(e) => setSubmissionText(e.target.value)} disabled={isActing} />
-                {submissionFieldErrors.submissionText && <p className="field-error">{submissionFieldErrors.submissionText}</p>}
-                <label className="label" htmlFor="detail-submission-link">Submission URL</label>
-                <input id="detail-submission-link" className="input" placeholder="https://example.com/deliverables" value={submissionLink} onChange={(e) => setSubmissionLink(e.target.value)} disabled={isActing} />
-                {submissionFieldErrors.submissionLink && <p className="field-error">{submissionFieldErrors.submissionLink}</p>}
-                <label className="label" htmlFor="detail-submission-files">Attach Files</label>
-                <input id="detail-submission-files" className="input" type="file" multiple onChange={(e) => setSubmissionFiles(Array.from(e.target.files || []))} disabled={isActing} />
-                <Button variant="secondary" onClick={onSubmit} disabled={isActing} loading={isActing} loadingText="Submitting...">Submit Work</Button>
+              <div className="stack" style={{ marginTop: '32px', padding: '40px', background: '#f8fafc', borderRadius: '32px', border: '1px solid #e2e8f0' }}>
+                <h3 style={{ margin: '0 0 24px', fontSize: '1.4rem', fontWeight: 900, color: '#0f172a' }}>Submit Mission Deliverables</h3>
+                <label className="label" htmlFor="detail-submission" style={{ marginBottom: '8px', display: 'block', fontWeight: 700, color: '#475569' }}>Technical Notes</label>
+                <textarea id="detail-submission" className="input" style={{ minHeight: '120px', resize: 'none', background: '#fff' }} value={submissionText} onChange={(e) => setSubmissionText(e.target.value)} disabled={isActing} />
+                <label className="label" htmlFor="detail-submission-link" style={{ marginTop: '20px', marginBottom: '8px', display: 'block', fontWeight: 700, color: '#475569' }}>Asset Link (Figma/GitHub/Drive)</label>
+                <input id="detail-submission-link" className="input" style={{ background: '#fff' }} placeholder="https://external-resource.com" value={submissionLink} onChange={(e) => setSubmissionLink(e.target.value)} disabled={isActing} />
+                <Button variant="primary" onClick={onSubmit} disabled={isActing} loading={isActing} style={{ marginTop: '30px', height: '60px', borderRadius: '16px', fontWeight: 900 }}>Finalize Submission</Button>
               </div>
             )}
 
             {user?.role === 'business' && project.status === 'Submitted' && (
-              <div className="stack">
-                <Button variant="primary" onClick={onComplete} disabled={isActing || !canCompleteProject} loading={isActing} loadingText="Completing...">Mark as Completed</Button>
-                {!canCompleteProject && <p className="muted">Release payment to freelancer before completing this project.</p>}
+              <div className="stack" style={{ marginTop: '32px' }}>
+                <Button variant="primary" onClick={onComplete} disabled={isActing || !canCompleteProject} loading={isActing} style={{ height: '60px', borderRadius: '16px', fontWeight: 900 }}>Confirm Quality & Finalize</Button>
+                {!canCompleteProject && <p className="badge-premium" style={{ background: 'rgba(239, 68, 68, 0.05)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.1)', padding: '12px', marginTop: '16px', textAlign: 'center' }}>Release payment to freelancer before completing this mission.</p>}
               </div>
             )}
-          </Card>
+          </div>
 
-          {canViewPayment && (
-            <Card className="stack">
-              <div className="project-head">
-                <h3>Escrow & Payments</h3>
-                <Button variant="secondary" onClick={loadPayment} disabled={isPaymentLoading} loading={isPaymentLoading} loadingText="Refreshing...">Refresh</Button>
-              </div>
-
-              {isPaymentLoading ? (
-                <Loader label="Loading payment timeline..." />
-              ) : payment ? (
-                <>
-                  <div className="payment-summary">
-                    <div>
-                      <p className="muted">Base Escrow</p>
-                      <p className="payment-amount">{formatINR(payment.amount)}</p>
-                    </div>
-                    <span className={`payment-pill payment-pill-${String(payment.status || '').toLowerCase()}`}>
-                      {payment.status}
-                    </span>
-                  </div>
-                  <div className="detail-meta-grid">
-                    <div className="detail-meta-item">
-                      <p className="detail-meta-label">Tips Added</p>
-                      <p className="detail-meta-value">{formatINR(payment.tipTotal || 0)}</p>
-                    </div>
-                    <div className="detail-meta-item">
-                      <p className="detail-meta-label">Total Paid Out</p>
-                      <p className="detail-meta-value">{formatINR((payment.amount || 0) + (payment.tipTotal || 0))}</p>
-                    </div>
-                  </div>
-                  <div className="grid grid-2">
-                    <p className="muted">Funded At: {payment.fundedAt ? new Date(payment.fundedAt).toLocaleString('en-IN') : 'Not funded'}</p>
-                    <p className="muted">Released At: {payment.releasedAt ? new Date(payment.releasedAt).toLocaleString('en-IN') : 'Not released'}</p>
-                  </div>
-
-                  {user?.role === 'business' && (
-                    <div className="row">
-                      {payment.status === 'Unfunded' && ['Assigned', 'Submitted', 'Completed'].includes(project.status) && (
-                        <Button onClick={onFundEscrow} disabled={isFundingEscrow} loading={isFundingEscrow} loadingText="Funding...">
-                          {gatewayConfig.provider === 'mock' ? 'Fund Escrow (Test Mode)' : 'Fund Escrow Securely'}
-                        </Button>
-                      )}
-                      {payment.status === 'Funded' && ['Submitted', 'Completed'].includes(project.status) && (
-                        <Button variant="success" onClick={onReleaseEscrow} disabled={isReleasingEscrow} loading={isReleasingEscrow} loadingText="Releasing...">
-                          Release Payment
-                        </Button>
-                      )}
-                    </div>
-                  )}
-
-                  {user?.role === 'business' && payment.status === 'Released' && (
-                    <div className="stack payout-tip-panel">
-                      <h4 className="section-title">Add Tip</h4>
-                      <p className="muted">
-                        {gatewayConfig.provider === 'mock'
-                          ? 'Test-mode payment flow without external gateway account.'
-                          : 'Secure checkout with gateway to reward exceptional delivery.'}
-                      </p>
-                      <div className="grid grid-2">
-                        <div className="stack">
-                          <label className="label" htmlFor="tip-amount">Tip Amount (INR)</label>
-                          <input
-                            id="tip-amount"
-                            className="input"
-                            type="number"
-                            min="1"
-                            placeholder="Enter tip amount"
-                            value={tipAmount}
-                            onChange={(e) => setTipAmount(e.target.value)}
-                            disabled={isAddingTip}
-                          />
-                        </div>
-                        <div className="stack">
-                          <label className="label" htmlFor="tip-note">Tip Note (Optional)</label>
-                          <input
-                            id="tip-note"
-                            className="input"
-                            placeholder="Great communication and quality"
-                            value={tipNote}
-                            onChange={(e) => setTipNote(e.target.value)}
-                            disabled={isAddingTip}
-                          />
-                        </div>
-                      </div>
-                      <div className="row">
-                        <Button
-                          variant="success"
-                          onClick={onAddTip}
-                          disabled={isAddingTip || !Number(tipAmount) || !gatewayConfig.enabled}
-                          loading={isAddingTip}
-                          loadingText="Adding tip..."
-                        >
-                          {gatewayConfig.provider === 'mock' ? 'Pay Tip (Test Mode)' : 'Pay Tip Securely'}
-                        </Button>
-                      </div>
-                      {!gatewayConfig.enabled && <p className="muted">Payment gateway is not configured by admin.</p>}
-                    </div>
-                  )}
-
-                  <div className="stack">
-                    <h4 className="section-title">Transaction Trail</h4>
-                    {paymentTransactions.length ? paymentTransactions.map((tx) => (
-                      <div key={tx.id} className="payment-transaction">
-                        <div>
-                          <p className="rating-meta"><span className={`tx-type tx-type-${String(tx.type || '').toLowerCase()}`}>{tx.type}</span></p>
-                          <p className="muted">{tx.actorName || 'System'} | {new Date(tx.createdAt).toLocaleString('en-IN')}</p>
-                          {tx.note && <p className="muted">{tx.note}</p>}
-                        </div>
-                        <strong>{formatINR(tx.amount)}</strong>
-                      </div>
-                    )) : <p className="muted">No payment transactions yet.</p>}
-                  </div>
-                </>
-              ) : (
-                <p className="muted">Escrow details are not available yet.</p>
-              )}
-            </Card>
-          )}
-
-          {user?.role === 'business' && project.status === 'Open' && (
-            <Card className="stack">
-              <div className="project-head">
-                <h3>Freelancer Applications</h3>
-                <Button variant="secondary" onClick={loadApplications} disabled={isApplicationsLoading} loading={isApplicationsLoading} loadingText="Refreshing...">Refresh</Button>
-              </div>
-              {isApplicationsLoading ? (
-                <Loader label="Loading applications..." />
-              ) : (
-                <div className="grid">
-                  {applications.length ? applications.map((application) => (
-                    <div key={application.id} className="application-card">
-                      <div className="project-head">
-                        <div className="application-user">
-                          <span className="application-avatar">{String(application.freelancerName || 'F').charAt(0).toUpperCase()}</span>
-                          <div>
-                            <p className="rating-meta">{application.freelancerName}</p>
-                          </div>
-                        </div>
-                        <span className={`application-status application-status-${String(application.status || '').toLowerCase()}`}>
-                          {application.status}
-                        </span>
-                      </div>
-                      <div className="selected-skills">
-                        {parseSkills(application.skills).length
-                          ? parseSkills(application.skills).map((skill) => (
-                            <span key={`${application.id}-${skill}`} className="skill-chip">{skill}</span>
-                          ))
-                          : <p className="muted">No skills provided</p>}
-                      </div>
-                      <div className="grid grid-2">
-                        <Card className="metric-card">
-                          <p>Experience</p>
-                          <strong>{application.experienceYears ?? 0} yrs</strong>
-                        </Card>
-                        <RatingSummary
-                          compact
-                          summary={{
-                            averageRating: Number(application.averageRating || 0),
-                            totalRatings: Number(application.totalRatings || 0),
-                            distribution: {
-                              5: Number(application.rating5Count || 0),
-                              4: Number(application.rating4Count || 0),
-                              3: Number(application.rating3Count || 0),
-                              2: Number(application.rating2Count || 0),
-                              1: Number(application.rating1Count || 0),
-                            },
-                          }}
-                        />
-                      </div>
-                      <p className="muted">{application.bio || 'No bio provided.'}</p>
-                      {application.coverLetter && <p className="muted">Cover Note: {application.coverLetter}</p>}
-                      <div className="row">
-                        {application.portfolioLink && (
-                          <a className="btn btn-secondary" href={application.portfolioLink} target="_blank" rel="noreferrer">
-                            Portfolio
-                          </a>
-                        )}
-                      <Button
-                        onClick={() => onAcceptApplication(application.id)}
-                        disabled={application.status !== 'Pending' || acceptingApplicationId === application.id}
-                        loading={acceptingApplicationId === application.id}
-                        loadingText="Assigning..."
-                      >
-                        Assign Freelancer
-                      </Button>
-                      </div>
-                    </div>
-                  )) : <p className="muted">No applications yet.</p>}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '32px' }}>
+            {canViewPayment && (
+              <div className="card-ui" style={{ padding: '32px', border: '1px solid #e2e8f0', background: 'rgba(255, 255, 255, 0.8)' }}>
+                <div className="project-head" style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 900, color: '#0f172a' }}>Escrow Ledger</h3>
+                  <Button variant="secondary" onClick={loadPayment} disabled={isPaymentLoading} loading={isPaymentLoading} style={{ padding: '8px 20px', borderRadius: '12px' }}>Refresh</Button>
                 </div>
-              )}
-            </Card>
-          )}
 
-          {canUseMessaging && (
-            <Card className="stack">
-              <div className="project-head">
-                <h3>Project Messages</h3>
-                <Button variant="secondary" onClick={loadMessages} disabled={isMessagesLoading} loading={isMessagesLoading} loadingText="Refreshing...">Refresh</Button>
+                {payment ? (
+                  <>
+                    <div className="payment-summary" style={{ background: '#f8fafc', padding: '24px', borderRadius: '24px', border: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+                      <div>
+                        <p style={{ margin: '0 0 4px', fontSize: '0.8rem', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase' }}>Current Escrow</p>
+                        <p style={{ margin: 0, fontSize: '2rem', fontWeight: 900, color: '#0f172a' }}>{formatINR(payment.amount)}</p>
+                      </div>
+                      <span className={`payment-pill payment-pill-${String(payment.status || '').toLowerCase()}`} style={{ fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        {payment.status}
+                      </span>
+                    </div>
+
+                    {user?.role === 'business' && (
+                      <div className="row" style={{ marginTop: '24px' }}>
+                        {payment.status === 'Unfunded' && (
+                          <Button onClick={onFundEscrow} disabled={isFundingEscrow} loading={isFundingEscrow} fullWidth style={{ height: '56px', borderRadius: '14px', fontWeight: 900 }}>
+                            Fund Security Escrow
+                          </Button>
+                        )}
+                        {payment.status === 'Funded' && (
+                          <Button variant="primary" onClick={onReleaseEscrow} disabled={isReleasingEscrow} loading={isReleasingEscrow} fullWidth style={{ height: '56px', borderRadius: '14px', fontWeight: 900 }}>
+                            Release Global Assets Payout
+                          </Button>
+                        )}
+                      </div>
+                    )}
+
+                    <div style={{ marginTop: '32px' }}>
+                      <h4 style={{ margin: '0 0 16px', fontSize: '1rem', fontWeight: 900, color: '#0f172a' }}>Audit Trail</h4>
+                      <div style={{ display: 'grid', gap: '12px' }}>
+                        {paymentTransactions.map((tx) => (
+                          <div key={tx.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', background: '#fff', borderRadius: '14px', border: '1px solid #f1f5f9' }}>
+                            <div>
+                              <p style={{ margin: '0 0 2px', fontSize: '0.85rem', fontWeight: 800, color: '#1e293b' }}>{tx.type}</p>
+                              <p style={{ margin: 0, fontSize: '0.75rem', color: '#94a3b8' }}>{new Date(tx.createdAt).toLocaleDateString()}</p>
+                            </div>
+                            <strong style={{ fontSize: '1rem', color: '#0f172a' }}>{formatINR(tx.amount)}</strong>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <p style={{ color: '#64748b', textAlign: 'center', padding: '40px' }}>Escrow details pending activation.</p>
+                )}
               </div>
+            )}
 
-              {chatError && <p className="field-error">{chatError}</p>}
+            {canUseMessaging && (
+              <div className="card-ui" style={{ padding: '32px', border: '1px solid #e2e8f0', background: 'rgba(255, 255, 255, 0.8)', display: 'flex', flexDirection: 'column' }}>
+                <div className="project-head" style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 900, color: '#0f172a' }}>Secure Comms</h3>
+                  <Button variant="secondary" onClick={loadMessages} disabled={isMessagesLoading} loading={isMessagesLoading} style={{ padding: '8px 20px', borderRadius: '12px' }}>Sync</Button>
+                </div>
 
-              {isMessagesLoading ? (
-                <Loader label="Loading messages..." />
-              ) : (
-                <div className="chat-list">
-                  {messages.length ? messages.map((message) => {
+                <div className="chat-list" style={{ flex: 1, minHeight: '300px', maxHeight: '500px', overflowY: 'auto', padding: '20px', background: '#f8fafc', borderRadius: '24px', marginBottom: '24px', border: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {messages.map((message) => {
                     const mine = message.senderId === user?.id;
                     return (
-                      <div key={message.id} className={`chat-item${mine ? ' chat-item-mine' : ''}`}>
-                        <p className="chat-meta">{message.senderName} - {new Date(message.createdAt).toLocaleString('en-IN')}</p>
-                        <p className="chat-text">{message.messageText}</p>
+                      <div key={message.id} style={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>
+                        <div style={{ padding: '14px 20px', background: mine ? '#4f46e5' : '#fff', borderRadius: mine ? '20px 20px 4px 20px' : '20px 20px 20px 4px', color: mine ? '#fff' : '#1e293b', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', border: mine ? 'none' : '1px solid #e2e8f0' }}>
+                          <p style={{ margin: 0, fontSize: '0.95rem', lineHeight: 1.5 }}>{message.messageText}</p>
+                        </div>
+                        <p style={{ margin: '6px 0 0', fontSize: '0.7rem', color: '#94a3b8', textAlign: mine ? 'right' : 'left', fontWeight: 700 }}>
+                          {mine ? 'Sent' : message.senderName} • {new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
                       </div>
                     );
-                  }) : <p className="muted">No messages yet. Start the conversation.</p>}
-                  {Object.values(typingUsers).length > 0 && (
-                    <p className="muted">{Object.values(typingUsers).join(', ')} typing...</p>
-                  )}
+                  })}
                   <div ref={chatEndRef} />
                 </div>
-              )}
 
-              <div className="stack">
-                <label className="label" htmlFor="chat-text">Message</label>
-                <textarea id="chat-text" className="textarea" value={chatText} onChange={(e) => onChatChange(e.target.value)} disabled={isSendingMessage} />
-                <Button onClick={onSendMessage} disabled={isSendingMessage || !chatText.trim()} loading={isSendingMessage} loadingText="Sending...">Send Message</Button>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <input
+                    className="input"
+                    placeholder="Type mission updates..."
+                    style={{ background: '#fff', border: '1px solid #e2e8f0' }}
+                    value={chatText}
+                    onChange={(e) => onChatChange(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && onSendMessage()}
+                  />
+                  <Button onClick={onSendMessage} disabled={isSendingMessage || !chatText.trim()} loading={isSendingMessage} style={{ borderRadius: '14px', width: '60px', height: '52px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                  </Button>
+                </div>
               </div>
-            </Card>
-          )}
+            )}
+          </div>
 
-          {canRate && (
-            <Card className="stack">
-              <h3>Ratings & Reviews</h3>
-              {ratingError && <p className="field-error">{ratingError}</p>}
-
-              {isRatingsLoading ? (
-                <Loader label="Loading ratings..." />
-              ) : (
-                <div className="grid">
-                  {ratings.length ? ratings.map((item) => (
-                    <div key={item.id} className="rating-item">
-                      <p className="rating-meta">{item.raterName} rated {item.rating}/5</p>
-                      <p className="muted">{item.reviewText || 'No written review.'}</p>
+          {user?.role === 'business' && project.status === 'Open' && (
+            <div className="card-ui" style={{ padding: '40px', border: '1px solid #e2e8f0', background: 'rgba(255, 255, 255, 0.8)' }}>
+              <div className="project-head" style={{ marginBottom: '32px' }}>
+                <h3 style={{ margin: 0, fontSize: '1.6rem', fontWeight: 900, color: '#0f172a' }}>Talent Assessment Hub</h3>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '24px' }}>
+                {applications.map((app) => (
+                  <div key={app.id} style={{ padding: '24px', background: '#fff', borderRadius: '24px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                      <div style={{ width: '56px', height: '56px', background: 'rgba(79, 70, 229, 0.08)', borderRadius: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#4f46e5', fontWeight: 900, fontSize: '1.4rem' }}>
+                        {String(app.freelancerName || 'C').charAt(0)}
+                      </div>
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, color: '#0f172a' }}>{app.freelancerName}</h4>
+                        <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>{app.experienceYears} Years Depth</p>
+                      </div>
                     </div>
-                  )) : <p className="muted">No ratings yet.</p>}
-                </div>
-              )}
-
-              {canSubmitRating && !alreadyRated && (
-                <div className="stack">
-                  <label className="label" htmlFor="rating-value">Your Rating</label>
-                  <select id="rating-value" className="select" value={ratingValue} onChange={(e) => setRatingValue(Number(e.target.value))}>
-                    <option value={5}>5 - Excellent</option>
-                    <option value={4}>4 - Good</option>
-                    <option value={3}>3 - Average</option>
-                    <option value={2}>2 - Poor</option>
-                    <option value={1}>1 - Very Poor</option>
-                  </select>
-                  {ratingFieldErrors.rating && <p className="field-error">{ratingFieldErrors.rating}</p>}
-
-                  <label className="label" htmlFor="rating-review">Review</label>
-                  <textarea id="rating-review" className="textarea" value={reviewText} onChange={(e) => setReviewText(e.target.value)} />
-                  {ratingFieldErrors.reviewText && <p className="field-error">{ratingFieldErrors.reviewText}</p>}
-                  <Button onClick={onSubmitRating} disabled={isSubmittingRating} loading={isSubmittingRating} loadingText="Submitting...">Submit Rating</Button>
-                </div>
-              )}
-            </Card>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                      {parseSkills(app.skills).slice(0, 4).map(skill => (
+                        <span key={skill} style={{ padding: '4px 12px', background: '#f1f5f9', borderRadius: '8px', fontSize: '0.75rem', fontWeight: 800, color: '#475569' }}>{skill}</span>
+                      ))}
+                    </div>
+                    <p style={{ margin: 0, fontSize: '0.9rem', color: '#64748b', lineHeight: 1.5 }}>{app.coverLetter || app.bio || "Candidate has not provided a strategic summary."}</p>
+                    <Button onClick={() => onAcceptApplication(app.id)} disabled={app.status !== 'Pending'} fullWidth style={{ marginTop: 'auto', borderRadius: '12px', height: '48px', fontWeight: 800 }}>Assign Infrastructure</Button>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
-        </>
+        </div>
       )}
     </section>
   );

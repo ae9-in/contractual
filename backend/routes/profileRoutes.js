@@ -1,13 +1,15 @@
 const express = require('express');
 const profileController = require('../controllers/profileController');
 const authMiddleware = require('../middleware/authMiddleware');
-const roleMiddleware = require('../middleware/roleMiddleware');
+const { uploadProfilePhoto } = require('../middleware/uploadMiddleware');
 
 const router = express.Router();
 
-router.use(authMiddleware, roleMiddleware('freelancer'));
+// Allow both freelancers AND business users to have profiles
+router.use(authMiddleware);
 
 router.get('/', profileController.getProfile);
 router.put('/', profileController.updateProfile);
+router.put('/photo', uploadProfilePhoto, profileController.updateProfilePhoto);
 
 module.exports = router;

@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import Loader from './Loader';
 
 export default function Button({
@@ -12,20 +13,37 @@ export default function Button({
   className = '',
   to,
   fullWidth = false,
+  style = {}
 }) {
   const cls = `btn btn-${variant}${fullWidth ? ' btn-full' : ''}${className ? ` ${className}` : ''}`;
 
+  const motionProps = {
+    whileHover: { scale: 1.02 },
+    whileTap: { scale: 0.98 },
+    transition: { type: "spring", stiffness: 400, damping: 17 }
+  };
+
   if (to) {
     return (
-      <Link to={to} className={cls}>
-        {children}
-      </Link>
+      <motion.div {...motionProps} style={{ display: 'inline-block', width: fullWidth ? '100%' : 'auto' }}>
+        <Link to={to} className={cls} style={style}>
+          {children}
+        </Link>
+      </motion.div>
     );
   }
 
   return (
-    <button type={type} className={cls} onClick={onClick} disabled={disabled || loading} aria-busy={loading}>
+    <motion.button
+      {...motionProps}
+      type={type}
+      className={cls}
+      onClick={onClick}
+      disabled={disabled || loading}
+      aria-busy={loading}
+      style={style}
+    >
       {loading ? <Loader inline size="sm" label={loadingText} /> : children}
-    </button>
+    </motion.button>
   );
 }

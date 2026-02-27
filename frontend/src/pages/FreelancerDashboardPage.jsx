@@ -1,274 +1,360 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import {
+  Briefcase,
+  Clock3,
+  Send,
+  Bell,
+  Search,
+  UserCircle2,
+  ChevronRight,
+  ArrowRight,
+  Sparkles,
+  Star,
+} from 'lucide-react';
 import { getProjects, submitProject } from '../services/projectService';
-import { useToast } from '../hooks/useToast';
 import { getNotifications, getUnreadProjectNotifications } from '../services/notificationService';
 import { connectRealtime, onRealtime } from '../services/realtimeService';
 import { getUserRatingSummary } from '../services/ratingService';
+import { useToast } from '../hooks/useToast';
 import { useAuth } from '../hooks/useAuth';
 import StatusBadge from '../components/ui/StatusBadge';
 import EmptyState from '../components/ui/EmptyState';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
-import RatingSummary from '../components/ui/RatingSummary';
+import PremiumHero from '../components/ui/PremiumHero';
 import { formatINR } from '../utils/currency';
 
+function MetricCard({ label, value, onClick, delay = 0 }) {
+  return (
+    <motion.button
+      type="button"
+      initial={{ opacity: 0, y: 18 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay, duration: 0.35 }}
+      whileHover={{ y: -4, boxShadow: '0 14px 26px rgba(79,70,229,0.12)' }}
+      onClick={onClick}
+      className="card-ui"
+      style={{
+        width: '100%',
+        textAlign: 'left',
+        border: '1px solid rgba(79, 70, 229, 0.12)',
+        background: 'rgba(255,255,255,0.92)',
+        borderRadius: '18px',
+        padding: '18px',
+        cursor: 'pointer',
+      }}
+    >
+      <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748b', fontWeight: 700, letterSpacing: '0.02em' }}>{label}</p>
+      <p style={{ margin: '8px 0 0', fontSize: '1.95rem', color: '#0f172a', fontWeight: 900 }}>{value}</p>
+    </motion.button>
+  );
+}
+
+function SectionCard({ title, right, children, delay = 0 }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay, duration: 0.35 }}
+    >
+      <Card className="glass" style={{ padding: '22px', border: '1px solid rgba(79,70,229,0.14)', background: 'rgba(255,255,255,0.88)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+          <h3 className="section-title-refined" style={{ margin: 0, fontSize: '1.25rem' }}>{title}</h3>
+          {right}
+        </div>
+        {children}
+      </Card>
+    </motion.div>
+  );
+}
+
 export default function FreelancerDashboardPage() {
-  const { addToast } = useToast();
-  const { user } = useAuth();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { addToast } = useToast();
+
   const [projects, setProjects] = useState([]);
+  const [unreadByProject, setUnreadByProject] = useState({});
+  const [recentNotifications, setRecentNotifications] = useState([]);
+  const [ratingSummary, setRatingSummary] = useState({ averageRating: 0, totalRatings: 0, distribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 } });
   const [submissionText, setSubmissionText] = useState({});
   const [submissionLink, setSubmissionLink] = useState({});
   const [submissionFiles, setSubmissionFiles] = useState({});
-  const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
   const [submittingProjectId, setSubmittingProjectId] = useState(null);
-  const [unreadByProject, setUnreadByProject] = useState({});
-  const [ratingSummary, setRatingSummary] = useState({ averageRating: 0, totalRatings: 0 });
-  const [recentNotifications, setRecentNotifications] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const loadAssignedProjects = async () => {
+  const loadProjects = async () => {
     try {
       setIsLoading(true);
       const { data } = await getProjects({ assignedToMe: true });
-      setProjects(data.projects);
+      setProjects(Array.isArray(data?.projects) ? data.projects : []);
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to load assigned projects');
+      setError(err.response?.data?.error || 'Failed to load assignments');
     } finally {
       setIsLoading(false);
     }
   };
 
-  useEffect(() => { loadAssignedProjects(); }, []);
+  const loadMeta = async () => {
+    try {
+      const requests = [getUnreadProjectNotifications(), getNotifications()];
+      if (user?.id) requests.push(getUserRatingSummary(user.id));
+      const [unreadRes, notifRes, ratingRes] = await Promise.all(requests);
+
+      setUnreadByProject(unreadRes.data?.unreadByProject || {});
+      setRecentNotifications((notifRes.data?.notifications || []).slice(0, 6));
+      if (ratingRes?.data?.summary) setRatingSummary(ratingRes.data.summary);
+    } catch {
+      setUnreadByProject({});
+      setRecentNotifications([]);
+    }
+  };
+
   useEffect(() => {
-    let active = true;
-    const loadUnread = async () => {
-      try {
-        const { data } = await getUnreadProjectNotifications();
-        if (active) setUnreadByProject(data.unreadByProject || {});
-      } catch {
-        if (active) setUnreadByProject({});
-      }
-    };
+    loadProjects();
+  }, []);
 
+  useEffect(() => {
+    if (!user?.id) return;
+
+    loadMeta();
     connectRealtime();
-    const offNew = onRealtime('notifications:new', loadUnread);
-    const offCount = onRealtime('notifications:count', loadUnread);
-    loadUnread();
-
+    const offNew = onRealtime('notifications:new', loadMeta);
+    const offCount = onRealtime('notifications:count', loadMeta);
     return () => {
-      active = false;
       offNew();
       offCount();
     };
-  }, []);
-  useEffect(() => {
-    let active = true;
-    const loadRecentNotifications = async () => {
-      try {
-        const { data } = await getNotifications();
-        if (active) setRecentNotifications((data.notifications || []).slice(0, 3));
-      } catch {
-        if (active) setRecentNotifications([]);
-      }
-    };
-    connectRealtime();
-    const offNew = onRealtime('notifications:new', loadRecentNotifications);
-    loadRecentNotifications();
-    return () => {
-      active = false;
-      offNew();
-    };
-  }, []);
-  useEffect(() => {
-    if (!user?.id) return;
-    (async () => {
-      try {
-        const { data } = await getUserRatingSummary(user.id);
-        setRatingSummary(data.summary || { averageRating: 0, totalRatings: 0 });
-      } catch {
-        setRatingSummary({ averageRating: 0, totalRatings: 0 });
-      }
-    })();
   }, [user?.id]);
 
-  const handleSubmitWork = async (projectId) => {
+  const counts = useMemo(() => {
+    const accepted = projects.length;
+    const assigned = projects.filter((p) => p.status === 'Assigned').length;
+    const submitted = projects.filter((p) => p.status === 'Submitted').length;
+    const completed = projects.filter((p) => p.status === 'Completed').length;
+    return { accepted, assigned, submitted, completed };
+  }, [projects]);
+
+  const sortedProjects = [...projects].sort((a, b) => {
+    const aScore = a.status === 'Assigned' ? 0 : a.status === 'Submitted' ? 1 : 2;
+    const bScore = b.status === 'Assigned' ? 0 : b.status === 'Submitted' ? 1 : 2;
+    if (aScore !== bScore) return aScore - bScore;
+    return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+  });
+
+  const goWork = (status) => {
+    const suffix = status ? `?status=${encodeURIComponent(status)}` : '';
+    navigate(`/freelancer/work${suffix}`);
+  };
+
+  const handleSubmit = async (projectId) => {
+    const notes = String(submissionText[projectId] || '').trim();
+    if (notes.length < 3) {
+      addToast('Add at least 3 characters in submission notes', 'danger');
+      return;
+    }
+
     try {
       setSubmittingProjectId(projectId);
       await submitProject(projectId, {
-        submissionText: submissionText[projectId] || '',
+        submissionText: notes,
         submissionLink: submissionLink[projectId] || '',
         files: submissionFiles[projectId] || [],
       });
+      addToast('Submission sent successfully', 'success');
       setSubmissionText((prev) => ({ ...prev, [projectId]: '' }));
       setSubmissionLink((prev) => ({ ...prev, [projectId]: '' }));
       setSubmissionFiles((prev) => ({ ...prev, [projectId]: [] }));
-      addToast('Submission successful', 'success');
-      loadAssignedProjects();
+      await Promise.all([loadProjects(), loadMeta()]);
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to submit work');
+      addToast(err.response?.data?.error || 'Failed to submit work', 'danger');
     } finally {
       setSubmittingProjectId(null);
     }
   };
 
-  const assignedCount = projects.filter((project) => project.status === 'Assigned').length;
-  const submittedCount = projects.filter((project) => project.status === 'Submitted').length;
-  const completedCount = projects.filter((project) => project.status === 'Completed').length;
-  const inReviewCount = submittedCount;
-
   return (
-    <section className="grid">
-      <Card className="dashboard-hero dashboard-hero-freelancer">
-        <div className="dashboard-head">
-          <div>
-            <h2 className="section-title">Freelancer Home</h2>
-            <p className="muted">Monitor your delivery pipeline and keep submissions moving.</p>
-          </div>
-          <div className="row">
-            <Button to="/freelancer/projects" variant="primary">Browse Projects</Button>
-            <Button to="/freelancer/work" variant="secondary">My Work</Button>
-          </div>
-        </div>
-        <div className="dashboard-visual" aria-hidden="true">
-          <span className="visual-dot visual-dot-a" />
-          <span className="visual-dot visual-dot-b" />
-          <span className="visual-dot visual-dot-c" />
-        </div>
-      </Card>
+    <section className="premium-page-wrap" style={{ display: 'grid', gap: '20px', background: 'transparent' }}>
 
-      {isLoading ? (
-        <div className="grid grid-4">
-          <Card className="metric-card skeleton-card" />
-          <Card className="metric-card skeleton-card" />
-          <Card className="metric-card skeleton-card" />
-          <Card className="metric-card skeleton-card" />
-        </div>
-      ) : (
-        <div className="grid grid-4 stagger-grid">
-          <Link className="metric-link" to="/freelancer/work"><Card className="metric-card"><p>Accepted</p><strong>{projects.length}</strong></Card></Link>
-          <Link className="metric-link" to="/freelancer/work?status=Assigned"><Card className="metric-card"><p>Assigned</p><strong>{assignedCount}</strong></Card></Link>
-          <Link className="metric-link" to="/freelancer/work?status=Submitted"><Card className="metric-card"><p>Submitted</p><strong>{submittedCount}</strong></Card></Link>
-          <Link className="metric-link" to="/freelancer/work?status=Completed"><Card className="metric-card"><p>Completed</p><strong>{completedCount}</strong></Card></Link>
-          <Link className="metric-link" to="/freelancer/profile"><RatingSummary summary={ratingSummary} compact /></Link>
-        </div>
-      )}
-      {error && <p className="alert">{error}</p>}
+      <PremiumHero
+        label="Freelancer Account"
+        title={user?.name || 'Freelancer'}
+        subtitle={user?.email || 'Track your projects and submissions'}
+        right={(
+          <div style={{ minWidth: '220px', border: '1px solid rgba(148,163,184,0.22)', background: 'rgba(15,23,42,0.2)', borderRadius: '16px', padding: '12px 14px' }}>
+            <p style={{ margin: 0, color: 'rgba(226,232,240,0.72)', fontSize: '0.76rem', fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+              Rating
+            </p>
+            <p style={{ margin: '6px 0 0', fontSize: '2rem', color: '#f8fafc', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Star size={24} color="#facc15" fill="#facc15" />
+              {Number(ratingSummary.averageRating || 0).toFixed(2)}
+            </p>
+            <p style={{ margin: '4px 0 0', color: 'rgba(226,232,240,0.72)', fontWeight: 700, fontSize: '0.82rem' }}>
+              {Number(ratingSummary.totalRatings || 0)} review{Number(ratingSummary.totalRatings || 0) === 1 ? '' : 's'}
+            </p>
+          </div>
+        )}
+        actions={(
+          <>
+            <Button to="/freelancer/projects" variant="primary"><Search size={16} /> Browse Projects</Button>
+            <Button to="/freelancer/work" variant="secondary"><Briefcase size={16} /> Track My Work</Button>
+          </>
+        )}
+      />
 
-      <div className="grid grid-2">
-        <Card className="dashboard-panel stack">
-          <div className="project-head">
-            <h3>Delivery Snapshot</h3>
-            <span className="dashboard-subtitle">{projects.length} active assignments</span>
-          </div>
-          <div className="pipeline-list">
-            <Link className="pipeline-item" to="/freelancer/work?status=Assigned">
-              <span>Assigned</span>
-              <strong>{assignedCount}</strong>
-            </Link>
-            <Link className="pipeline-item" to="/freelancer/work?status=Submitted">
-              <span>In Review</span>
-              <strong>{inReviewCount}</strong>
-            </Link>
-            <Link className="pipeline-item" to="/freelancer/work?status=Completed">
-              <span>Completed</span>
-              <strong>{completedCount}</strong>
-            </Link>
-            <Link className="pipeline-item" to="/freelancer/profile">
-              <span>Profile Rating</span>
-              <strong>{Number(ratingSummary?.averageRating || 0).toFixed(1)}</strong>
-            </Link>
-          </div>
-        </Card>
-
-        <Card className="dashboard-panel stack">
-          <h3>Quick Actions</h3>
-          <div className="action-grid">
-            <Link className="action-tile" to="/freelancer/projects">
-              <p className="rating-meta">Browse Projects</p>
-              <p className="muted">Find opportunities based on your profile skills.</p>
-            </Link>
-            <Link className="action-tile" to="/freelancer/work">
-              <p className="rating-meta">Track My Work</p>
-              <p className="muted">Open assigned projects and submit deliverables fast.</p>
-            </Link>
-            <Link className="action-tile" to="/freelancer/notifications">
-              <p className="rating-meta">Check Notifications</p>
-              <p className="muted">Stay updated on applications and payment events.</p>
-            </Link>
-          </div>
-        </Card>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+        <MetricCard label="Accepted" value={counts.accepted} onClick={() => goWork('')} delay={0.05} />
+        <MetricCard label="Assigned" value={counts.assigned} onClick={() => goWork('Assigned')} delay={0.1} />
+        <MetricCard label="Submitted" value={counts.submitted} onClick={() => goWork('Submitted')} delay={0.15} />
+        <MetricCard label="Completed" value={counts.completed} onClick={() => goWork('Completed')} delay={0.2} />
       </div>
 
-      <Card className="stack">
-        <div className="project-head">
-          <h3>Recent Notifications</h3>
-          <Button to="/freelancer/notifications" variant="secondary">View All</Button>
-        </div>
-        {recentNotifications.length ? (
-          <div className="grid">
-            {recentNotifications.map((item) => (
-              <div key={item.id} className={`notification-inline${item.isRead ? '' : ' notification-inline-unread'}`}>
-                <p className="rating-meta">{item.title}</p>
-                <p className="muted">{item.messageText}</p>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="muted">No recent notifications.</p>
-        )}
-      </Card>
+      <motion.div
+        initial={{ opacity: 0, y: 14 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.25 }}
+        style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px', position: 'relative', zIndex: 2 }}
+      >
+        <Button variant="secondary" onClick={() => navigate('/freelancer/projects')}><Search size={16} /> Project Marketplace</Button>
+        <Button variant="secondary" onClick={() => navigate('/freelancer/work?status=Assigned')}><Clock3 size={16} /> Active Deliverables</Button>
+        <Button variant="secondary" onClick={() => navigate('/freelancer/profile')}><UserCircle2 size={16} /> Profile / Settings</Button>
+      </motion.div>
 
-      {isLoading ? (
-        <div className="grid grid-auto">
-          <Card className="skeleton-card skeleton-project" />
-          <Card className="skeleton-card skeleton-project" />
-          <Card className="skeleton-card skeleton-project" />
-        </div>
-      ) : (
-        <div className="grid grid-auto stagger-grid">
-          {projects.map((project) => (
-            <Card
-              key={project.id}
-              className="project-card card-clickable"
-              onClick={(event) => {
-                if (event.target.closest('button, a, input, select, textarea, label')) return;
-                navigate(`/projects/${project.id}`);
-              }}
-            >
-              <div className="project-head">
-                <h3><Link className="card-title-link" to={`/projects/${project.id}`}>{project.title}</Link></h3>
-                <div className="row">
-                  {Number(unreadByProject[project.id] || 0) > 0 && <span className="notif-badge">{unreadByProject[project.id]}</span>}
-                  <StatusBadge status={project.status} />
-                </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', alignItems: 'start', position: 'relative', zIndex: 2 }}>
+        <div style={{ display: 'grid', gap: '16px' }}>
+          <SectionCard
+            title="Active Assignments"
+            right={<Link to="/freelancer/work" className="text-gradient-premium" style={{ textDecoration: 'none', fontWeight: 800 }}>Open Tracker</Link>}
+            delay={0.3}
+          >
+            {isLoading ? (
+              <p style={{ margin: '14px 0 0', color: '#64748b' }}>Loading assignments...</p>
+            ) : sortedProjects.length === 0 ? (
+              <div style={{ marginTop: '16px' }}>
+                <EmptyState
+                  message="No assignments yet. Browse projects and start building momentum."
+                  action={<Button to="/freelancer/projects" variant="primary">Browse Projects</Button>}
+                />
               </div>
-              <p className="muted">Budget: {formatINR(project.budget)}</p>
-              <p className="muted">Business: {project.businessName || 'Business'}</p>
-              <Button to={`/projects/${project.id}`} variant="secondary">Open Details</Button>
+            ) : (
+              <div style={{ marginTop: '8px', display: 'grid', gap: '10px' }}>
+                {sortedProjects.slice(0, 8).map((project, idx) => {
+                  const unread = Number(unreadByProject[project.id] || 0);
+                  return (
+                    <motion.div
+                      key={project.id}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.35 + idx * 0.04 }}
+                      whileHover={{ y: -2 }}
+                      style={{ border: '1px solid #e2e8f0', borderRadius: '14px', padding: '12px', background: '#fff' }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'start' }}>
+                        <div>
+                          <p style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>{project.title}</p>
+                          <p style={{ margin: '6px 0 0', fontSize: '0.86rem', color: '#64748b' }}>
+                            Budget: <strong style={{ color: '#0f172a' }}>{formatINR(project.budget)}</strong>
+                          </p>
+                          {unread > 0 && (
+                            <span style={{ display: 'inline-block', marginTop: '8px', background: '#fee2e2', color: '#b91c1c', border: '1px solid #fecaca', borderRadius: '999px', padding: '2px 8px', fontSize: '0.75rem', fontWeight: 700 }}>
+                              {unread} new response{unread > 1 ? 's' : ''}
+                            </span>
+                          )}
+                        </div>
+                        <StatusBadge status={project.status} />
+                      </div>
 
-              {project.status === 'Assigned' && (
-                <div className="stack">
-                  <label className="label" htmlFor={`submission-${project.id}`}>Submission Notes</label>
-                  <textarea id={`submission-${project.id}`} className="textarea" value={submissionText[project.id] || ''} onChange={(e) => setSubmissionText((prev) => ({ ...prev, [project.id]: e.target.value }))} disabled={submittingProjectId === project.id} />
-                  <label className="label" htmlFor={`submission-link-${project.id}`}>Submission URL</label>
-                  <input id={`submission-link-${project.id}`} className="input" placeholder="https://example.com/deliverables" value={submissionLink[project.id] || ''} onChange={(e) => setSubmissionLink((prev) => ({ ...prev, [project.id]: e.target.value }))} disabled={submittingProjectId === project.id} />
-                  <label className="label" htmlFor={`submission-files-${project.id}`}>Attach Files</label>
-                  <input id={`submission-files-${project.id}`} className="input" type="file" multiple onChange={(e) => setSubmissionFiles((prev) => ({ ...prev, [project.id]: Array.from(e.target.files || []) }))} disabled={submittingProjectId === project.id} />
-                  <Button variant="secondary" onClick={() => handleSubmitWork(project.id)} disabled={submittingProjectId === project.id} loading={submittingProjectId === project.id} loadingText="Submitting...">Submit Work</Button>
-                </div>
-              )}
-            </Card>
-          ))}
-          {!projects.length && (
-            <Card className="stack dashboard-empty">
-              <EmptyState message="You haven't accepted any projects yet." />
-              <Button to="/freelancer/projects">Find Your First Project</Button>
-            </Card>
-          )}
+                      {project.status === 'Assigned' && (
+                        <div style={{ marginTop: '10px', borderTop: '1px solid #f1f5f9', paddingTop: '10px', display: 'grid', gap: '8px' }}>
+                          <textarea
+                            className="textarea"
+                            placeholder="Submission notes"
+                            value={submissionText[project.id] || ''}
+                            onChange={(e) => setSubmissionText((prev) => ({ ...prev, [project.id]: e.target.value }))}
+                            style={{ minHeight: '90px' }}
+                          />
+                          <input
+                            className="input"
+                            placeholder="Submission link"
+                            value={submissionLink[project.id] || ''}
+                            onChange={(e) => setSubmissionLink((prev) => ({ ...prev, [project.id]: e.target.value }))}
+                          />
+                          <input
+                            className="input"
+                            type="file"
+                            multiple
+                            onChange={(e) => setSubmissionFiles((prev) => ({ ...prev, [project.id]: Array.from(e.target.files || []) }))}
+                          />
+                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+                            <Button
+                              variant="primary"
+                              onClick={() => handleSubmit(project.id)}
+                              loading={submittingProjectId === project.id}
+                              disabled={submittingProjectId === project.id}
+                            >
+                              <Send size={16} /> Submit
+                            </Button>
+                            <Button variant="secondary" onClick={() => navigate(`/projects/${project.id}`)}>
+                              Details <ChevronRight size={16} />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      {project.status !== 'Assigned' && (
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
+                          <Button variant="secondary" onClick={() => navigate(`/projects/${project.id}`)}>
+                            Details <ChevronRight size={16} />
+                          </Button>
+                        </div>
+                      )}
+                    </motion.div>
+                  );
+                })}
+              </div>
+            )}
+          </SectionCard>
         </div>
-      )}
+
+        <div style={{ display: 'grid', gap: '16px' }}>
+          <SectionCard
+            title="Recent Activity"
+            right={<Link to="/freelancer/notifications" className="text-gradient-premium" style={{ textDecoration: 'none', fontWeight: 800 }}>View All</Link>}
+            delay={0.35}
+          >
+            <div style={{ display: 'grid', gap: '10px' }}>
+              {recentNotifications.length === 0 ? (
+                <p style={{ margin: 0, color: '#64748b' }}>No recent notifications.</p>
+              ) : recentNotifications.map((item, idx) => (
+                <motion.div
+                  key={item.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.4 + idx * 0.04 }}
+                  style={{ borderBottom: '1px solid #f1f5f9', paddingBottom: '10px' }}
+                >
+                  <p style={{ margin: 0, color: '#0f172a', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Bell size={14} color="#4f46e5" /> {item.title || 'Update'}
+                  </p>
+                  <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.88rem' }}>
+                    {item.messageText || item.message || ''}
+                  </p>
+                </motion.div>
+              ))}
+            </div>
+            <div style={{ marginTop: '12px' }}>
+              <Button variant="secondary" fullWidth onClick={() => navigate('/freelancer/notifications')}>
+                Open Notifications <ArrowRight size={14} />
+              </Button>
+            </div>
+          </SectionCard>
+        </div>
+      </div>
+
+      {error && <p className="alert alert-danger">{error}</p>}
     </section>
   );
 }

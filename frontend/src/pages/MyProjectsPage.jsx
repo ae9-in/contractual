@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link, useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { FileText, Filter, ListTodo, PlusCircle, LayoutDashboard, ChevronRight, Bell } from 'lucide-react';
 import { getMyProjects } from '../services/projectService';
 import { getUnreadProjectNotifications } from '../services/notificationService';
 import { connectRealtime, onRealtime } from '../services/realtimeService';
@@ -8,11 +10,13 @@ import EmptyState from '../components/ui/EmptyState';
 import Loader from '../components/ui/Loader';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
+import PremiumHero from '../components/ui/PremiumHero';
 import { formatINR } from '../utils/currency';
 import { formatDateOnly } from '../utils/date';
 
 export default function MyProjectsPage() {
-  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [projects, setProjects] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -22,15 +26,17 @@ export default function MyProjectsPage() {
     try {
       setIsLoading(true);
       const { data } = await getMyProjects();
-      setProjects(data.projects);
+      setProjects(Array.isArray(data?.projects) ? data.projects : []);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to load projects');
+      setProjects([]);
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => { loadProjects(); }, []);
+
   useEffect(() => {
     let active = true;
     const loadUnread = async () => {
@@ -59,57 +65,167 @@ export default function MyProjectsPage() {
     () => (selectedStatus ? projects.filter((p) => p.status === selectedStatus) : projects),
     [projects, selectedStatus],
   );
-  const submittedProjects = useMemo(() => filteredProjects.filter((p) => p.status === 'Submitted'), [filteredProjects]);
+
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: { opacity: 1, transition: { staggerChildren: 0.1 } }
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0 }
+  };
+
+  const setStatus = (status) => {
+    if (!status) {
+      searchParams.delete('status');
+    } else {
+      searchParams.set('status', status);
+    }
+    setSearchParams(searchParams);
+  };
 
   return (
-    <section className="grid">
-      <Card className="stack page-header-card">
-        <h2 className="section-title">My Projects</h2>
-        <p className="muted">Full list of projects posted by your business account.{selectedStatus ? ` Filter: ${selectedStatus}` : ''}</p>
-        <div className="row status-filter-bar">
-          <Button to="/business/projects" variant={!selectedStatus ? 'primary' : 'secondary'}>All</Button>
-          <Button to="/business/projects?status=Open" variant={selectedStatus === 'Open' ? 'primary' : 'secondary'}>Open</Button>
-          <Button to="/business/projects?status=Assigned" variant={selectedStatus === 'Assigned' ? 'primary' : 'secondary'}>Assigned</Button>
-          <Button to="/business/projects?status=Submitted" variant={selectedStatus === 'Submitted' ? 'primary' : 'secondary'}>Submitted</Button>
-          <Button to="/business/projects?status=Completed" variant={selectedStatus === 'Completed' ? 'primary' : 'secondary'}>Completed</Button>
-        </div>
-      </Card>
-      {error && <p className="alert">{error}</p>}
+    <motion.section
+      initial="hidden"
+      animate="visible"
+      variants={containerVariants}
+      className="grid"
+      style={{ gap: '32px' }}
+    >
+      <motion.div variants={itemVariants}>
+        <PremiumHero
+          label="Business Workspace"
+          title="My Projects"
+          subtitle="Manage your postings and track freelancer progress in real-time."
+          actions={(
+            <Link to="/business/post-project">
+              <Button variant="primary" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 24px' }}>
+                <PlusCircle size={18} /> Post New Project
+              </Button>
+            </Link>
+          )}
+        />
+      </motion.div>
 
-      {isLoading ? <Loader label="Loading your projects..." /> : (
+      <motion.div variants={itemVariants} style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginRight: '8px', color: '#64748b', fontWeight: 600, fontSize: '0.9rem' }}>
+          <Filter size={16} /> Filter by Status:
+        </div>
+        {[
+          { id: null, label: 'All' },
+          { id: 'Open', label: 'Open' },
+          { id: 'Assigned', label: 'Assigned' },
+          { id: 'Submitted', label: 'Submitted' },
+          { id: 'Completed', label: 'Completed' },
+        ].map((btn) => (
+          <button
+            key={btn.label}
+            onClick={() => setStatus(btn.id)}
+            style={{
+              padding: '8px 20px',
+              borderRadius: '999px',
+              border: 'none',
+              fontSize: '0.9rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              background: selectedStatus === btn.id ? '#4f46e5' : '#f1f5f9',
+              color: selectedStatus === btn.id ? 'white' : '#64748b',
+              transition: 'all 0.2s',
+              boxShadow: selectedStatus === btn.id ? '0 4px 12px rgba(79, 70, 229, 0.2)' : 'none'
+            }}
+          >
+            {btn.label}
+          </button>
+        ))}
+      </motion.div>
+
+      {error && <motion.p variants={itemVariants} className="alert alert-danger">{error}</motion.p>}
+
+      {isLoading ? (
+        <div className="grid grid-auto">
+          {[1, 2, 3].map(i => <Card key={i} className="skeleton-card" style={{ height: '220px', borderRadius: '24px' }} />)}
+        </div>
+      ) : (
         <>
-          <div className="grid grid-auto">
-            {filteredProjects.map((project) => (
-              <Card key={project.id} className="project-card">
-                <div className="project-head">
-                  <h3>{project.title}</h3>
-                  <div className="row">
-                    {Number(unreadByProject[project.id] || 0) > 0 && <span className="notif-badge">{unreadByProject[project.id]}</span>}
-                    <StatusBadge status={project.status} />
+          {filteredProjects.length > 0 ? (
+            <div className="grid grid-auto stagger-grid">
+              {filteredProjects.map((project) => (
+                <motion.div
+                  key={project.id}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25 }}
+                  whileHover={{ y: -6, boxShadow: '0 20px 40px rgba(15,23,42,0.08)' }}
+                  onClick={() => navigate(`/projects/${project.id}`)}
+                  style={{ background: 'white', borderRadius: '24px', padding: '28px', border: '1px solid #f1f5f9', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '16px', position: 'relative', overflow: 'hidden', height: '100%' }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, lineHeight: 1.4, color: '#0f172a', fontFamily: '"Outfit", sans-serif' }}>
+                      {project.title}
+                    </h3>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {Number(unreadByProject[project.id] || 0) > 0 && (
+                        <span style={{ background: '#ef4444', color: 'white', fontSize: '0.75rem', fontWeight: 'bold', padding: '2px 8px', borderRadius: '999px' }}>
+                          {unreadByProject[project.id]} New
+                        </span>
+                      )}
+                      <StatusBadge status={project.status} />
+                    </div>
                   </div>
-                </div>
-                <p className="muted">Budget: {formatINR(project.budget)}</p>
-                <p className="muted">Deadline: {formatDateOnly(project.deadline)}</p>
-                {project.submissionText && <p className="muted">Submission Notes: {project.submissionText}</p>}
-                {project.submissionLink && (
-                  <p className="muted">
-                    Submission Link:{' '}
-                    <a href={project.submissionLink} target="_blank" rel="noreferrer">{project.submissionLink}</a>
-                  </p>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '16px', padding: '16px', background: '#f8fafc', borderRadius: '16px' }}>
+                    <div>
+                      <p style={{ margin: '0 0 4px', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Budget</p>
+                      <p style={{ margin: 0, fontWeight: 800, color: '#0f172a', fontSize: '1.1rem' }}>{formatINR(project.budget)}</p>
+                    </div>
+                    <div>
+                      <p style={{ margin: '0 0 4px', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Deadline</p>
+                      <p style={{ margin: 0, fontWeight: 700, color: '#0f172a', fontSize: '1rem' }}>{formatDateOnly(project.deadline)}</p>
+                    </div>
+                  </div>
+
+                  {project.status === 'Submitted' && (
+                    <div style={{ padding: '12px 16px', background: '#ecfdf5', borderRadius: '12px', border: '1px solid #a7f3d0', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <Bell size={16} color="#059669" />
+                      <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#065f46' }}>Deliverables ready to review</span>
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: '8px' }}>
+                    <div style={{ margin: 0, fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>
+                      {project.freelancerId ? (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
+                          Assigned
+                        </span>
+                      ) : 'Awaiting Applications'}
+                    </div>
+                    <Link to={`/projects/${project.id}`}>
+                      <Button variant="secondary" className="btn-sm" style={{ height: '38px', borderRadius: '10px', fontSize: '0.9rem' }}>
+                        Manage <ChevronRight size={14} style={{ marginLeft: '4px' }} />
+                      </Button>
+                    </Link>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          ) : (
+            <div>
+              <Card style={{ padding: '80px 20px', textAlign: 'center', background: 'white', borderRadius: '24px', border: '1px dashed #cbd5e1' }}>
+                <EmptyState
+                  message={selectedStatus ? `No ${selectedStatus.toLowerCase()} projects found.` : "You haven't posted any projects yet."}
+                />
+                {!selectedStatus && (
+                  <Link to="/business/post-project" style={{ marginTop: '24px', display: 'inline-block' }}>
+                    <Button>Create Your First Project</Button>
+                  </Link>
                 )}
-                {(project.submissionFiles || []).length > 0 && (
-                  <p className="muted">Submission Files: {(project.submissionFiles || []).length}</p>
-                )}
-                <div className="row">
-                  <Button to={`/projects/${project.id}`} variant="secondary">View Details</Button>
-                </div>
               </Card>
-            ))}
-            {!filteredProjects.length && <EmptyState message="No projects available yet." />}
-          </div>
-          {!submittedProjects.length && <EmptyState message="No submissions yet." />}
+            </div>
+          )}
         </>
       )}
-    </section>
+    </motion.section>
   );
 }

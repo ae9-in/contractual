@@ -12,6 +12,8 @@ export const createProject = (payload) => {
   files.forEach((file) => formData.append('projectReferenceFiles', file));
   return api.post('/projects', formData);
 };
+
+export const postProject = createProject;
 export const getProjects = (params) => api.get('/projects', { params });
 export const getProjectById = (id) => api.get(`/projects/${id}`);
 export const getMyProjects = () => api.get('/projects/mine');
