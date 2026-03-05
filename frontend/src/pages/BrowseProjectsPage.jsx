@@ -51,6 +51,7 @@ export default function BrowseProjectsPage() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [applyingProjectId, setApplyingProjectId] = useState(null);
+  const [resultMode, setResultMode] = useState('open');
 
   const loadProjects = async () => {
     const params = { status: 'Open' };
@@ -59,8 +60,24 @@ export default function BrowseProjectsPage() {
 
     try {
       setIsLoading(true);
+      setError('');
       const { data } = await getProjects(params);
-      const allProjects = Array.isArray(data?.projects) ? data.projects : [];
+      let allProjects = Array.isArray(data?.projects) ? data.projects : [];
+      let mode = 'open';
+
+      // Fallback: when no Open projects exist, show active marketplace items so the page never appears broken.
+      if (!allProjects.length) {
+        const fallbackResponse = await getProjects({
+          minBudget: params.minBudget,
+          maxBudget: params.maxBudget,
+        });
+        const fallbackProjects = Array.isArray(fallbackResponse?.data?.projects)
+          ? fallbackResponse.data.projects
+          : [];
+        allProjects = fallbackProjects.filter((project) => project.status !== 'Completed');
+        mode = 'fallback';
+      }
+
       let filtered = allProjects;
 
       if (filters.category) {
@@ -73,8 +90,10 @@ export default function BrowseProjectsPage() {
       }
 
       setProjects(filtered);
+      setResultMode(mode);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to load projects');
+      setResultMode('open');
     } finally {
       setIsLoading(false);
     }
@@ -246,6 +265,18 @@ export default function BrowseProjectsPage() {
                 <Search size={20} style={{ marginRight: '10px' }} /> Analyze Opportunities
               </Button>
             </div>
+            {!isLoading && (
+              <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                <p style={{ margin: 0, color: '#334155', fontWeight: 700, fontSize: '0.92rem' }}>
+                  {filteredProjects.length} project{filteredProjects.length === 1 ? '' : 's'} found
+                </p>
+                {resultMode === 'fallback' && (
+                  <p style={{ margin: 0, color: '#475569', fontWeight: 600, fontSize: '0.82rem' }}>
+                    Open projects unavailable right now. Showing active non-completed projects.
+                  </p>
+                )}
+              </div>
+            )}
           </Card>
         </div>
       </motion.div>
@@ -324,11 +355,11 @@ export default function BrowseProjectsPage() {
                     <Button
                       variant="primary"
                       onClick={(e) => { e.stopPropagation(); handleApply(project.id); }}
-                      disabled={project.hasApplied || applyingProjectId === project.id}
+                      disabled={project.hasApplied || applyingProjectId === project.id || project.status !== 'Open'}
                       loading={applyingProjectId === project.id}
                       style={{ borderRadius: '12px', padding: '10px 24px', fontWeight: 900 }}
                     >
-                      {project.hasApplied ? 'Submission Verfied' : 'Instant Apply'}
+                      {project.hasApplied ? 'Submission Verfied' : project.status === 'Open' ? 'Instant Apply' : `Closed (${project.status})`}
                     </Button>
                   </div>
             </motion.div>

@@ -15,7 +15,6 @@ import MyProjectsPage from './pages/MyProjectsPage';
 import MyWorkPage from './pages/MyWorkPage';
 import ProjectDetailPage from './pages/ProjectDetailPage';
 import NotificationsPage from './pages/NotificationsPage';
-import MockCheckoutPage from './pages/MockCheckoutPage';
 import ProtectedRoute from './routes/ProtectedRoute';
 import RoleRoute from './routes/RoleRoute';
 import { useAuth } from './hooks/useAuth';
@@ -44,7 +43,6 @@ function AnimatedRoutes() {
             <Route path="/projects/:id" element={<ProjectDetailPage />} />
 
             <Route element={<RoleRoute allowedRole="business" />}>
-              <Route path="/checkout/mock" element={<MockCheckoutPage />} />
               <Route element={<DashboardLayout />}>
                 <Route path="/business/dashboard" element={<BusinessDashboardPage />} />
                 <Route path="/business/post-project" element={<PostProjectPage />} />

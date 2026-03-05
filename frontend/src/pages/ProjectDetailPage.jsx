@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import {
   acceptProjectApplication,
   applyForProject,
   completeProject,
   createProjectPaymentOrder,
-  fundProjectEscrow,
   getProjectApplications,
   getProjectById,
   getProjectPayment,
@@ -39,8 +38,6 @@ import {
 
 export default function ProjectDetailPage() {
   const { id } = useParams();
-  const navigate = useNavigate();
-  const location = useLocation();
   const { user } = useAuth();
   const { addToast } = useToast();
   const [project, setProject] = useState(null);
@@ -75,7 +72,7 @@ export default function ProjectDetailPage() {
   const [isFundingEscrow, setIsFundingEscrow] = useState(false);
   const [isReleasingEscrow, setIsReleasingEscrow] = useState(false);
   const [isAddingTip, setIsAddingTip] = useState(false);
-  const [gatewayConfig, setGatewayConfig] = useState({ provider: 'mock', enabled: false, keyId: '' });
+  const [gatewayConfig, setGatewayConfig] = useState({ provider: 'razorpay', enabled: false, keyId: '' });
   const [acceptingApplicationId, setAcceptingApplicationId] = useState(null);
   const [typingUsers, setTypingUsers] = useState({});
   const typingTimeoutRef = useRef(null);
@@ -168,26 +165,12 @@ export default function ProjectDetailPage() {
   }, [project?.id, project?.status, project?.freelancerId, canViewPayment]);
 
   useEffect(() => {
-    if (!location.state?.mockPaymentResult) return;
-    if (location.state.mockPaymentResult === 'success') {
-      addToast(
-        location.state.purpose === 'tip' ? 'Tip added (test mode)' : 'Escrow funded (test mode)',
-        'success',
-      );
-      loadPayment();
-    } else if (location.state.mockPaymentResult === 'failed') {
-      setError(location.state.errorMessage || 'Mock payment failed');
-    }
-    navigate(location.pathname, { replace: true, state: null });
-  }, [location.state, navigate]);
-
-  useEffect(() => {
     (async () => {
       try {
         const { data } = await getPaymentGatewayConfig();
-        setGatewayConfig({ provider: data.provider || 'mock', enabled: Boolean(data.enabled), keyId: data.keyId || '' });
+        setGatewayConfig({ provider: data.provider || 'razorpay', enabled: Boolean(data.enabled), keyId: data.keyId || '' });
       } catch {
-        setGatewayConfig({ provider: 'mock', enabled: false, keyId: '' });
+        setGatewayConfig({ provider: 'razorpay', enabled: false, keyId: '' });
       }
     })();
   }, []);
@@ -333,18 +316,7 @@ export default function ProjectDetailPage() {
   const onFundEscrow = async () => {
     try {
       setIsFundingEscrow(true);
-      if (!gatewayConfig.enabled) {
-        await fundProjectEscrow(project.id);
-        addToast('Escrow funded', 'success');
-        loadPayment();
-        return;
-      }
-
-      if (gatewayConfig.provider === 'mock') {
-        const { data } = await createProjectPaymentOrder(project.id, { purpose: 'escrow' });
-        navigate(`/checkout/mock?projectId=${project.id}&orderId=${data.order.id}&purpose=escrow&amount=${data.order.amount}`);
-        return;
-      }
+      if (!gatewayConfig.enabled) throw new Error('Razorpay is not configured');
 
       const scriptLoaded = await loadRazorpayCheckoutScript();
       if (!scriptLoaded) throw new Error('Unable to load payment gateway');
@@ -403,18 +375,7 @@ export default function ProjectDetailPage() {
     try {
       setIsAddingTip(true);
       if (!Number(tipAmount)) throw new Error('Enter a valid tip amount');
-      if (!gatewayConfig.enabled) {
-        throw new Error('Payment gateway is not configured');
-      }
-      if (gatewayConfig.provider === 'mock') {
-        const { data } = await createProjectPaymentOrder(project.id, {
-          purpose: 'tip',
-          tipAmount: Number(tipAmount),
-          note: tipNote,
-        });
-        navigate(`/checkout/mock?projectId=${project.id}&orderId=${data.order.id}&purpose=tip&amount=${data.order.amount}`);
-        return;
-      }
+      if (!gatewayConfig.enabled) throw new Error('Razorpay is not configured');
 
       const scriptLoaded = await loadRazorpayCheckoutScript();
       if (!scriptLoaded) throw new Error('Unable to load payment gateway');
